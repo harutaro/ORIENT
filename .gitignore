@@ -1,0 +1,17 @@
+# Ignore everything by default
+*
+
+# Allow specific files and directories
+!README.md
+!RESULT.sav/
+!RESULT_AAAI2026/
+!scripts/
+!sow_cpp-0.9.5-py3.9-linux-x86_64.egg.tgz
+!src/
+
+# Allow all contents within the allowed directories
+!RESULT.sav/**
+!RESULT_AAAI2026/**
+!scripts/**
+!src/**
+

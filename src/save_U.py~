@@ -1,0 +1,333 @@
+# Initial Weight Matrix W（= Uh・Σ・V）の U から tan 2φ を求める
+# ex) python save_U.py 0 10 512 20.0 0.90 1.0
+
+import os
+import sys
+import time
+import numpy as np
+import random
+import math
+from copy import deepcopy
+import matplotlib.pyplot as plt
+import scipy.cluster.hierarchy
+
+import torch
+import torch.nn as nn
+from torch.autograd import Function
+import pynvml
+import sow_cpp
+
+def seed_everything(seed=0):
+    """Fix all random seeds"""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    return
+
+def orthogonality_penalty(mat):
+    return float(torch.linalg.norm(mat.T.mm(mat)
+                                   - torch.eye(mat.shape[1], dtype=mat.dtype, device=mat.device)))
+
+def print_ptbl(tbl):
+    N = int((1+math.sqrt(1+4*tbl.shape[0]))/2)
+    print(f'N={N}')
+    cnt = 0
+    for i in range(N-1):
+        if N > 16 :
+            if i < 2 or i > N-3:
+                print(f'(%4d) ptbl[%7d:%7d]: (%4d, %4d), (%4d, %4d), ..., (%4d, %4d)'
+                      % (i, cnt, cnt+N, tbl[cnt], tbl[cnt+1],
+                         tbl[cnt+2], tbl[cnt+3],
+                         tbl[cnt+N-2], tbl[cnt+N-1]))
+        else :
+            print(f'(%2d) ptbl[%2d:%2d]:' % (i, cnt, cnt+N), end='')
+            for j in range(int(N/2)):
+                print(f' (%2d,%2d)' % (tbl[cnt+2*j], tbl[cnt+2*j+1]), end='')
+                if j < int(N/2)-1 : print(',', end='')
+            print(']')
+        cnt += N
+    return
+
+def print_pidx(tbl):
+    N = int((1+math.sqrt(1+4*tbl.shape[0]))/2)
+    print(f'N={N}')
+    cnt = 0
+    for i in range(N-1):
+        if N > 16 :
+            if i < 2 or i > N-3:
+                i1 = tbl[cnt]
+                j1 = tbl[cnt+1]
+                i2 = tbl[cnt+2]
+                j2 = tbl[cnt+3]
+                i3 = tbl[cnt+N-2]
+                j3 = tbl[cnt+N-1]
+                idx1 = int(i1 * (2 * N - 3 - i1) / 2) + j1 - 1
+                idx2 = int(i2 * (2 * N - 3 - i2) / 2) + j2 - 1
+                idx3 = int(i3 * (2 * N - 3 - i3) / 2) + j3 - 1
+                print(f'(%4d) pidx[%7d:%7d]:  %4d, %4d, ..., %4d'
+                      % (i, cnt, cnt+N, idx1, idx2, idx3))
+        else :
+            print(f'(%2d) pidx[%2d:%2d]:' % (i, cnt, cnt+N), end='')
+            for j in range(int(N/2)):
+                ii = tbl[cnt+2*j]
+                jj = tbl[cnt+2*j+1]
+                idx = int(ii * (2 * N - 3 - ii) / 2) + jj - 1
+                print(f' %2d' % (idx), end='')
+                if j < int(N/2)-1 : print(',', end='')
+            print('')
+        cnt += N
+    return
+
+class Givens_U_Function(Function):
+    """Output & Gradient Calcuation for Y=X*U^T """
+    @staticmethod
+    def forward(ctx, X, tan_2phi, ptbl):
+        #print('[U_Function Forward]')
+        BS = int(X.shape[0])
+        N = int(X.shape[1])
+        rank_T = torch.tensor(N, dtype=torch.int, device=X.device, requires_grad=False)
+        freezed_rank_T = torch.tensor(0, dtype=torch.int, device=X.device, requires_grad=False)
+        cos_phi = torch.empty((1, int(N*(N-1)/2)), dtype=X.dtype, device=X.device, requires_grad=False)
+        sin_phi = torch.empty((1, int(N*(N-1)/2)), dtype=X.dtype, device=X.device, requires_grad=False)
+        ZZ = torch.empty((1, N*N*BS), dtype=X.dtype, device=X.device, requires_grad=False)
+        Y = torch.empty((BS, N), dtype=X.dtype, device=X.device, requires_grad=True)
+        sow_cpp.forward_Uh(X, ptbl, rank_T, tan_2phi, cos_phi, sin_phi, ZZ, Y)
+        ctx.save_for_backward(tan_2phi, cos_phi, sin_phi, ZZ, ptbl, rank_T, freezed_rank_T)
+        return Y
+
+    @staticmethod
+    def backward(ctx, grad_Y):
+        #print('[U_Function Backward]')
+        tan_2phi, cos_phi, sin_phi, ZZ, ptbl, rank_T, freezed_rank_T = ctx.saved_tensors
+        BS = int(grad_Y.shape[0])
+        N = int(grad_Y.shape[1])
+        grad_X = torch.empty((BS, N), dtype=grad_Y.dtype, device=grad_Y.device, requires_grad=False)
+        grad_tan_2phi = torch.empty((BS, int(N*(N-1)/2)),
+                                    dtype=grad_Y.dtype, device=grad_Y.device, requires_grad=False)
+        sow_cpp.backward_Uh(grad_Y, ptbl, rank_T, freezed_rank_T, tan_2phi,
+                            cos_phi, sin_phi, ZZ, grad_X, grad_tan_2phi)
+        # 全サンプル-mean方式（→性能劣化を招くので全サンプル使用の方がよさそう → 次行をコメントアウト）
+        #grad_tan_2phi = grad_tan_2phi.mean(axis=0).view(1,-1)
+
+        #print(' ctx.needs_input_grad:',  ctx.needs_input_grad)
+        if ctx.needs_input_grad[0] == False : grad_X = None
+        if ctx.needs_input_grad[1] == False : grad_tan_2phi = None
+        # ptbl has no grad.
+        return grad_X, grad_tan_2phi, None
+
+class Givens_U_Net(nn.Module):
+    def __init__(self, M, ptbl, device=None, dtype=None):
+        factory_kwargs = {"device": device, "dtype": dtype}
+        super().__init__()
+        self.device = device
+        self.dtype = dtype
+        self.reset_parameters(M, ptbl)
+        self.U_func = Givens_U_Function.apply
+
+    def reset_parameters(self, M, ptbl):
+        """各パラメータの初期値を設定"""
+        dtype = self.dtype
+        device = self.device
+        #print(self.ptbl)
+        N = 2 ** M
+        self.N = N
+        # tan_2phi の初期値を設定
+        #   本来 phi は -pi/4 [rad] 以上, +pi/4 未満
+        rotation_params_num = int(N*(N-1)/2)
+        # パラメータ tan_2phi の設定
+        phi = torch.zeros(rotation_params_num, dtype=dtype, device=device)
+        self.tan_2phi = nn.Parameter(torch.tan(2.0 * phi))
+        # ptbll の設定（それぞれはクラス変数．SOWのインスタンスすべてで共通）
+        assert ptbl.shape[0] == int(N*(N-1))
+        self.ptbl = ptbl
+
+    def forward_Givens_U(self, X):
+        # Givens Rotation Matrixes の収束確認を行うために使用
+        Y = self.U_func(X, self.tan_2phi, self.ptbl)
+        return Y
+
+    def get_optimizer(self, lr, mo, wd):
+        """Returns the optimizer"""
+        params = self.parameters()
+        return torch.optim.SGD(params, lr=lr, momentum=mo, weight_decay=wd)
+
+    def get_copy(self):
+        """Get weights from the model"""
+        return deepcopy(self.state_dict())
+
+    def set_state_dict(self, state_dict):
+        """Load weights into the model"""
+        self.load_state_dict(deepcopy(state_dict))
+        return
+
+def main(device, M, BS, lr, momentum, clip):
+    seed_everything(seed=0)
+    pynvml.nvmlInit()
+    gpu = torch.cuda.current_device()
+    dtype = torch.float64
+    print(f'gpu={gpu}, dtype={dtype}, device={device}')
+    N = 2 ** M
+    lr_factor = 2.0
+    lr_patience = 5000
+    lr_min = 1.0e-8
+    max_step = 100000
+    print(f'N={N}, BS={BS}, lr={lr}, clipgrad={clip}, lr_factor={lr_factor}, lr_patience={lr_patience}')
+
+    ## 初期データ保管ファイル (Txxxx.dict) からの ptbl の読み込み
+    fname = 'INIT/T%04d.dict' % (N)
+    print(f'{fname}: loading..')
+    sow_dict = torch.load(fname)
+    for k, v in sow_dict.items(): print(' ', k, v.shape, v.dtype, v.device, v.requires_grad)
+    print()
+    ptbl = sow_dict['ptbl'].to(device=device)
+    # 読み込み結果の確認
+    print('  ptbl:', ptbl.shape, ptbl.dtype, ptbl.device)
+    print_ptbl(ptbl)
+    print_pidx(ptbl)
+
+    ## 初期データ保管ファイル (Sxxxx.dict) からの S_max, a の読み込み
+    fname = 'INIT/S%04d.dict' % (N)
+    print(f'{fname}: loading..')
+    sow_dict = torch.load(fname)
+    #for k, v in sow_dict.items(): print(' ', k, v.shape, v.dtype, v.device, v.requires_grad)
+    #print()
+    S_max = sow_dict['S_max'].to(device=device)
+    a = sow_dict['a'].to(device=device)
+    # 読み込み結果の確認
+    print('  S_max:', S_max)
+
+    ### 正解パラメータ（U, S, V, init_a）の設定
+    tmpW = torch.empty((N, N), dtype=dtype, device=device)
+    nn.init.kaiming_uniform_(tmpW, a=math.sqrt(5))
+    U, S, Vt = torch.linalg.svd(tmpW, full_matrices=False)
+    V = Vt.t()
+    W = (U * S).mm(V.T)
+    f = torch.empty((N), dtype=dtype, device=device)
+    f[0] = S[0] / S_max
+    for i in range(1, N): f[i] = S[i] / S[i-1]
+    init_a = torch.log(f / (1.0 - f))
+    
+    print('U:', U.shape, U.dtype, U.device, U.requires_grad)
+    print('S:', S.shape, S.dtype, S.device, S.requires_grad)
+    print('V:', V.shape, V.dtype, V.device, V.requires_grad)
+    print('W:', W.shape, W.dtype, W.device, W.requires_grad)
+    print(f'|U^T*U-I|=%.3e' % (orthogonality_penalty(U)))
+    print(f'|V^T*V-I|=%.3e' % (orthogonality_penalty(V)))
+    print(f'|W-U*S*Vt|=%.3e' % (torch.linalg.norm(W-(U*S).mm(V.T))))
+    print(f'S_max={S_max}')
+    print(f'init_a:', init_a.shape, init_a.dtype, init_a.device, init_a.requires_grad)
+    print(init_a)
+    print('-----------------')
+    
+    # モデル構築 (Uh)
+    model = Givens_U_Net(M, ptbl, device, dtype)
+    optimizer = model.get_optimizer(lr, momentum, 0.0)
+    print('optimizer.param_groups:', len(optimizer.param_groups), type(optimizer.param_groups))
+    for n, pg in enumerate(optimizer.param_groups) :
+        print(f'Group[{n}]')
+        print(pg)
+        print('---')
+
+    ### モデル更新
+    rank = model.N
+    best_model = model.get_copy()
+    best_loss = np.inf
+    patience = lr_patience
+    print(f'rank={rank}')
+
+    # Start of step-loop
+    tstart = time.time()
+    for step in range(max_step):
+        #print(f'== step:{step}, N:{N} ==')
+        X = torch.rand(BS, N, dtype=dtype, device=device, requires_grad=False)
+        X = X * S
+        X_sav = torch.clone(X).detach()
+        Y = X.mm(U.T)
+        
+        t2 = time.time()
+        optimizer.zero_grad()
+        Y_est = model.forward_Givens_U(X)
+        loss = torch.sum((Y_est - Y)*(Y_est - Y)) / (N * BS)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.tan_2phi, clip)
+        optimizer.step()
+        if loss < best_loss :
+            best_loss = loss
+            best_model = model.get_copy()
+            print(f'[U] %8d %4d %4d lr=%.3e loss=%.4e time=%.3f *'
+                  % (step, rank, patience, lr, float(loss), time.time()-t2))
+            patience = lr_patience
+        else :
+            '''
+            print(f'[U] %8d %4d %4d lr=%.3e loss=%.4e time=%.3f'
+                  % (step, rank, patience, lr, float(loss), time.time()-t2))
+            '''
+            patience -= 1
+            if patience <= 0:
+                # if it runs out of patience, reduce the learning rate
+                lr /= lr_factor
+                if lr < lr_min:
+                    # if the lr decreases below minimum, stop the training session
+                    print()
+                    break
+                patience = lr_patience
+                optimizer.param_groups[0]['lr'] = lr
+                model.set_state_dict(best_model)
+                print(f'[U] %8d %4d %4d lr=%.3e loss=%.4e time=%.3f'
+                      % (step, rank, patience, lr, float(loss), time.time()-t2))
+        '''
+        print('X_sav:', X_sav.shape)
+        print(X_sav)
+        print('Y:', Y.shape)
+        print(Y)
+        print('Y_est:', Y_est.shape)
+        print(Y_est)
+        print('|X_sav|:', torch.sum(X_sav*X_sav, axis=1))
+        print('|Y|:', torch.sum(Y*Y, axis=1))
+        print('|Y_est|:', torch.sum(Y_est*Y_est, axis=1))
+        print('X:', X.shape)
+        print(X)
+        print('tan_2phi:', model.tan_2phi.shape)
+        print(model.tan_2phi)
+        print('-------')
+        exit()
+        '''
+    #
+    model.set_state_dict(best_model)
+    sow_dict = dict()
+    sow_dict['tan_2phi'] = model.tan_2phi.to('cpu')
+    #
+    print('sow_dict:', type(sow_dict), 'len=', len(sow_dict))
+    for k, v in sow_dict.items() :
+        if torch.is_tensor(v) : print(' ', k, type(v), v.shape, v.dtype, v.device, v.requires_grad)
+        else : print(' ', k, type(v), v)
+    #
+    torch.save(sow_dict, f'INIT/U%04d.dict' % (N))
+
+    return
+
+if __name__=='__main__':
+    if len(sys.argv) != 7 :
+        print(F'[USAGE] {sys.argv[0]} gpu M BS lr momentum clip')
+        print(sys.argv)
+        exit()
+    gpu = int(sys.argv[1])
+    use_cuda = torch.cuda.is_available()
+    if use_cuda:
+        #device = torch.device(f'cuda:%d'%(gpu))
+        #os.environ['CUDA_VISIBLE_DEVICES'] = f'{gpu}'
+        torch.cuda.set_device(gpu)
+        device = torch.device(f'cuda:{gpu}')
+    else: raise ValueError("CUDA is not available!!")
+    print(f'device={device}')
+    M = int(sys.argv[2])
+    BS = int(sys.argv[3])
+    lr = float(sys.argv[4])
+    mo = float(sys.argv[5])
+    clip = float(sys.argv[6])
+    main(device, M, BS, lr, mo, clip)
+    exit()

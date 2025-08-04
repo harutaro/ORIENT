@@ -1,0 +1,241 @@
+import torch
+import torch.autograd as autograd
+from argparse import ArgumentParser
+
+from .incremental_learning import Inc_Learning_Appr
+from datasets.exemplars_dataset import ExemplarsDataset
+
+
+class Appr(Inc_Learning_Appr):
+    """Class implementing the finetuning baseline"""
+
+    def __init__(self, model, device, nepochs=100, lr=0.05, lr_min=1e-4, lr_factor=3, lr_patience=5, clipgrad=10000,
+                 momentum=0, wd=0, multi_softmax=False, wu_nepochs=0, wu_lr_factor=1, fix_bn=False, eval_on_train=False,
+                 logger=None, exemplars_dataset=None, all_outputs=False):
+        super(Appr, self).__init__(model, device, nepochs, lr, lr_min, lr_factor, lr_patience, clipgrad, momentum, wd,
+                                   multi_softmax, wu_nepochs, wu_lr_factor, fix_bn, eval_on_train, logger,
+                                   exemplars_dataset)
+        self.all_out = all_outputs
+        self.num_tasks_learned = 0
+
+    @staticmethod
+    def exemplars_dataset_class():
+        return ExemplarsDataset
+
+    @staticmethod
+    def extra_parser(args):
+        """Returns a parser containing the approach specific parameters"""
+        parser = ArgumentParser()
+        parser.add_argument('--all-outputs', action='store_true', required=False,
+                            help='Allow all weights related to all outputs to be modified (default=%(default)s)')
+        return parser.parse_known_args(args)
+
+    def _get_optimizer(self):
+        """Returns the optimizer"""
+        if len(self.exemplars_dataset) == 0 and len(self.model.heads) > 1 and not self.all_out:
+            # if there are no exemplars, previous heads are not modified
+            params = list(self.model.model.parameters()) + list(self.model.heads[-1].parameters())
+        else:
+            params = self.model.parameters()
+        return torch.optim.SGD(params, lr=self.lr, weight_decay=self.wd, momentum=self.momentum)
+
+    def train(self, t, trn_loader, val_loader):
+        # Set the task ID to each SupSup_MaskLinear
+        for m in self.model.model.ListCustomModules(): m.set_task(t)
+        #
+        self.pre_train_process(t, trn_loader)
+        self.train_loop(t, trn_loader, val_loader)
+        self.post_train_process(t, trn_loader)
+        self.num_tasks_learned = t + 1
+        # Set the learned task ID to each SupSup_MaskLinear
+        for m in self.model.model.ListCustomModules():
+            m.num_tasks_learned = self.num_tasks_learned
+            m.cache_masks()
+
+    def train_loop(self, t, trn_loader, val_loader):
+        """Contains the epochs loop"""
+
+        # add exemplars to train_loader
+        if len(self.exemplars_dataset) > 0 and t > 0:
+            trn_loader = torch.utils.data.DataLoader(trn_loader.dataset + self.exemplars_dataset,
+                                                     batch_size=trn_loader.batch_size,
+                                                     shuffle=True,
+                                                     num_workers=trn_loader.num_workers,
+                                                     pin_memory=trn_loader.pin_memory)
+
+        # FINETUNING TRAINING -- contains the epochs loop
+        super().train_loop(t, trn_loader, val_loader)
+        #
+
+        # EXEMPLAR MANAGEMENT -- select training subset
+        self.exemplars_dataset.collect_exemplars(self.model, trn_loader, val_loader.dataset.transform)
+
+#________________________________________________________________________
+#
+# methods for Class Incremental Learning
+#________________________________________________________________________
+
+    def eval_taw(self, u, val_loader):
+        #set_model_task(self.model.model, u, verbose=False)
+        for m in self.model.model.ListCustomModules(): m.set_task(u)
+        with torch.no_grad():
+            total_loss, total_acc, total_num = 0, 0, 0
+            self.model.eval()	# Set Evaluation mode to LLL_Net
+            for images, targets in val_loader:
+                # Forward current model
+                outputs = self.model(images.to(self.device))
+                loss = self.criterion(u, outputs, targets.to(self.device))
+                hits = self.calculate_metrics_supsup(outputs, targets)
+                # Log
+                total_loss += loss.item() * len(targets)
+                total_acc += hits.sum().item()
+                total_num += len(targets)
+        return total_loss / total_num, total_acc / total_num
+
+    def eval_tag(self, u, val_loader, oneshot=True):
+        #u is the grand truth of task id.
+        num_tasks = self.model.task_cls[u].item()
+        #print("In eval_tag : num_tasks = ", num_tasks)
+        total_loss, total_acc, total_num = 0, 0, 0
+        self.model.eval()	# Set Evaluation mode to LLL_Net
+        for images, targets in val_loader:
+            if oneshot:
+                inferred_task = self.oneshot_task_inference(self.model, images.to(self.device), num_tasks, self.num_tasks_learned)
+            else:
+                inferred_task = self.binary_task_inference(self.model, images.to(self.device), num_tasks, self.num_tasks_learned)
+            if inferred_task == u:
+                # Forward current model
+                with torch.no_grad():
+                    #set_model_task(self.model.model, -1, verbose=False)
+                    set_model_task(self.model.model, inferred_task, verbose=False)
+                    outputs = self.model(images.to(self.device))
+                    hits = self.calculate_metrics_supsup(outputs, targets, taw_mode=False)
+                    loss = self.criterion(u, outputs, targets.to(self.device))
+            else:
+                hits = torch.zeros(len(targets))
+                loss = torch.zeros(1)
+            # Log
+            total_loss += loss.item() * len(targets)
+            total_acc += hits.sum().item()
+            total_num += len(targets)
+        return total_loss / total_num, total_acc / total_num
+
+
+    def eval_tag_000(self, u, val_loader):
+        #u is the grand truth of task id.
+        num_tasks = self.model.task_cls[u].item()
+        #print("In eval_tag : num_tasks = ", num_tasks)
+        total_loss, total_acc, total_num = 0, 0, 0
+        self.model.eval()	# Set Evaluation mode to LLL_Net
+        multi_softmax = self.multi_softmax
+        self.multi_softmax = True
+        for images, targets in val_loader:
+            outputs = self.model(images.to(self.device))
+            for tid in range(self.num_tasks_learned):
+                with torch.no_grad():
+                    #set_model_task(self.model.model, tid, verbose=False)
+                    for m in self.model.model.ListCustomModules(): m.set_task(tid)
+                    ops = self.model(images.to(self.device))
+                    outputs[tid] = ops[tid]
+            #
+            hits = self.calculate_metrics_supsup(outputs, targets, taw_mode=False)
+            loss = self.criterion(u, outputs, targets.to(self.device))
+            # Log
+            total_loss += loss.item() * len(targets)
+            total_acc += hits.sum().item()
+            total_num += len(targets)
+        #
+        self.multi_softmax = multi_softmax
+        return total_loss / total_num, total_acc / total_num
+
+
+    def calculate_metrics_supsup(self, outputs, targets, taw_mode=True):
+        """Contains the main Task-Aware and Task-Agnostic metrics"""
+        pred = torch.zeros_like(targets.to(self.device))
+        if taw_mode:
+            # Task-Aware Multi-Head
+            for m in range(len(pred)):
+                this_task = (self.model.task_cls.cumsum(0) <= targets[m]).sum()
+                pred[m] = outputs[this_task][m].argmax() + self.model.task_offset[this_task]
+            hits = (pred == targets.to(self.device)).float()
+        else:
+            # Task-Agnostic Multi-Head
+            if self.multi_softmax:
+                outputs = [torch.nn.functional.log_softmax(output, dim=1) for output in outputs]
+                pred = torch.cat(outputs, dim=1).argmax(1)
+            else:
+                pred = torch.cat(outputs, dim=1).argmax(1)
+            hits = (pred == targets.to(self.device)).float()
+        return hits
+
+
+    def oneshot_task_inference(self, model, batch, num_tasks, num_tasks_learned):
+        # Set task < 0 for inference mode
+        set_model_task(model.model, -1, verbose=False)
+        
+        # Initialize alphas to uniform
+        alphas = torch.zeros(num_tasks, 1, 1)
+        alphas[:num_tasks_learned] = 1 / num_tasks_learned
+        alphas.to(self.device)
+        alphas.requires_grad_(True)
+        model.model.zero_grad()
+        set_alphas(model.model, alphas, verbose=False)
+        
+        logits = model(batch)
+        logits = logits[0]
+        
+        # Entropy of logits
+        entropy = -(logits.softmax(dim=1) * logits.log_softmax(dim=1)).sum(1).mean()
+        
+        # Gradient wrt alphas
+        g, = autograd.grad(entropy, alphas)
+        g = g.reshape(1,-1)[0]
+        
+        inferred_task = (-g[:num_tasks_learned]).argmax()
+        return inferred_task.item()
+
+
+    def binary_task_inference(self, model, batch, num_tasks, num_tasks_learned,
+                              lr=5e-2, min_lr=1e-3, itrmax=1000, tol=1e-5):
+        # Set task < 0 for inference mode
+        set_model_task(model.model, -1, verbose=False)
+        
+        # Initialize alphas to uniform
+        alphas = torch.zeros(num_tasks, 1, 1)
+        alphas[:num_tasks_learned] = 1 / num_tasks_learned
+        alphas.to(self.device)
+        alphas.requires_grad_(True)
+        for j in range(itrmax):
+            model.model.zero_grad()
+            set_alphas(model.model, alphas, verbose=False)
+            logits = model(batch)
+            logits = logits[0]
+            # Entropy of logits
+            entropy = -(logits.softmax(dim=1) * logits.log_softmax(dim=1)).sum(1).mean()
+            #print("entropy[%2d] :"%(j), entropy.item(), " / LR : ", lr, " / logits :", logits.mean(0).view(1,-1))
+            if j > 0:
+                if entropy > entropy_prev:
+                    lr /= 2
+                    if lr < min_lr:
+                        break
+                    continue
+                elif entropy == entropy_prev:
+                    break
+            #
+            # Gradient wrt alphas
+            g, = autograd.grad(entropy, alphas)
+            dalphas = - lr * g
+            if dalphas.norm() / alphas.norm() < tol:
+                break
+            #
+            alphas = alphas + dalphas
+            alphas[num_tasks_learned:] = 0
+            alphas = alphas / alphas.sum()
+            entropy_prev = entropy
+        #
+        #print("_"*32, "gradient of alphas", "_"*32)
+        #print("alphas:", alphas.squeeze().view(1,-1))
+        inferred_task = (alphas[:num_tasks_learned]).argmax()
+        return inferred_task.item()
+
+
