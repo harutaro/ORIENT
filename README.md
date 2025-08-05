@@ -65,6 +65,3 @@
 	cd $(TOP)
 	mkdir RESULT_AAAI2025/
 
-## Execution of experiments
-
-(1)
