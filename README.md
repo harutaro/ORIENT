@@ -33,37 +33,38 @@
 
 (1) install virtual torch environment in $(Your_Dir)        
 
-		cd $(Your_Dir)
-		python3 -m venv venv
-		source venv/bin/activate.csh
-		python3 -c 'import sys; print("\n".join(sys.path))'
-		pip install -U pip
-		pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
-		pip install matplotlib scipy pynvml
-		# not mandatory
-		pip install torchinfo
-		pip install openpyxl pynvml
+	cd $(Your_Dir)
+	python3 -m venv venv
+	source venv/bin/activate.csh
+	python3 -c 'import sys; print("\n".join(sys.path))'
+	pip install -U pip
+	pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+	pip install matplotlib scipy pynvml
+	# not mandatory
+	pip install torchinfo
+	pip install openpyxl pynvml
     
 (2) store 'sow_cpp' package in your virtual environment    
 
-		gzip -cd sow_cpp-0.9.5-py3.9-linux-x86_64.egg.tgz | ( cd ${Your_Dir}/venv/lib/python3.9/site-packages/ ; tar xf -)
-		cat ${Your_Dir}a/venv/lib/python3.9/site-packages/sow_cpp-0.9.5-py3.9-linux-x86_64.egg/EGG-INFO/PKG-INFO    (not mandatory)
+	gzip -cd sow_cpp-0.9.5-py3.9-linux-x86_64.egg.tgz | ( cd ${Your_Dir}/venv/lib/python3.9/site-packages/ ; tar xf -)
+	cat ${Your_Dir}a/venv/lib/python3.9/site-packages/sow_cpp-0.9.5-py3.9-linux-x86_64.egg/EGG-INFO/PKG-INFO    (not mandatory)
     
 (3) setup initial parameters of ORIENT (already done in this GIT)    
 
-		cd $(TOP)
-		source ${Your_Dir}/venv/bin/activate.csh
-		cd src
-		mkdir networks/INIT
-		python save_tbl.py ${gpu} 10
-		python save_S.py ${gpu} 10
-		python save_V.py ${gpu} 10 512 20 0.90 1.0
-		python save_U.py ${gpu} 10 512 20 0.90 1.0
+	cd $(TOP)
+	source ${Your_Dir}/venv/bin/activate.csh
+	cd src
+	mkdir networks/INIT
+	python save_tbl.py ${gpu} 10
+	python save_S.py ${gpu} 10
+	python save_V.py ${gpu} 10 512 20 0.90 1.0
+	python save_U.py ${gpu} 10 512 20 0.90 1.0
     
 (4) setup Log Directory    
 
-		cd $(TOP)
-		mkdir RESULT_AAAI2025/
+	cd $(TOP)
+	mkdir RESULT_AAAI2025/
 
 ## Execution of experiments
+
 (1)
