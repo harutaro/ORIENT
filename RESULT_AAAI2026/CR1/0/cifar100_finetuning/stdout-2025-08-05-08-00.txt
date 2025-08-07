@@ -1,0 +1,46 @@
+============================================================================================================
+Arguments =
+	approach: finetuning
+	batch_size: 64
+	clipping: 1.0
+	datasets: ['cifar100']
+	eval_on_train: True
+	exp_name: None
+	fix_bn: True
+	gpu: 1
+	gridsearch_tasks: -1
+	keep_existing_head: False
+	last_layer_analysis: False
+	log: ['disk']
+	lr: 0.0263039750973134
+	lr_factor: 3.0
+	lr_first: None
+	lr_min: 1e-05
+	lr_patience: 30
+	momentum: 0.9
+	multi_softmax: True
+	nc_first_task: None
+	nepochs: 200
+	network: resnet50_32
+	no_cudnn_deterministic: False
+	num_tasks: 1
+	num_workers: 4
+	pin_memory: True
+	pretrained: False
+	results_path: ../RESULT_AAAI2026/CR1/0
+	save_models: True
+	seed: 0
+	stop_at_task: 0
+	validation: 0.1
+	warmup_lr_factor: 1.0
+	warmup_nepochs: 0
+	weight_decay: 0.0
+============================================================================================================
+	device: cuda:1
+============================================================================================================
+Network arguments =
+	dropout: 0.417598542370663
+	fix_features: True
+	load_features: True
+	pretrained_path: ../Conv-Model/ResNet50-TinyImageNet.pt
+============================================================================================================

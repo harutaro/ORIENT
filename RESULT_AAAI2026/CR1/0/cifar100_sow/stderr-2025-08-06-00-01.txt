@@ -1,0 +1,55 @@
+Exception in thread Thread-5:
+Traceback (most recent call last):
+  File "/usr/lib64/python3.9/threading.py", line 980, in _bootstrap_inner
+    self.run()
+  File "/usr/lib64/python3.9/threading.py", line 917, in run
+    self._target(*self._args, **self._kwargs)
+  File "/mnt/public/ORIENT/aaai2025/venv/lib64/python3.9/site-packages/torch/utils/data/_utils/pin_memory.py", line 61, in _pin_memory_loop
+    do_one_step()
+  File "/mnt/public/ORIENT/aaai2025/venv/lib64/python3.9/site-packages/torch/utils/data/_utils/pin_memory.py", line 37, in do_one_step
+    r = in_queue.get(timeout=MP_STATUS_CHECK_INTERVAL)
+  File "/usr/lib64/python3.9/multiprocessing/queues.py", line 122, in get
+    return _ForkingPickler.loads(res)
+  File "/mnt/public/ORIENT/aaai2025/venv/lib64/python3.9/site-packages/torch/multiprocessing/reductions.py", line 541, in rebuild_storage_fd
+    fd = df.detach()
+  File "/usr/lib64/python3.9/multiprocessing/resource_sharer.py", line 57, in detach
+    with _resource_sharer.get_connection(self._id) as conn:
+  File "/usr/lib64/python3.9/multiprocessing/resource_sharer.py", line 86, in get_connection
+    c = Client(address, authkey=process.current_process().authkey)
+  File "/usr/lib64/python3.9/multiprocessing/connection.py", line 506, in Client
+    c = SocketClient(address)
+  File "/usr/lib64/python3.9/multiprocessing/connection.py", line 634, in SocketClient
+    s.connect(address)
+FileNotFoundError: [Errno 2] No such file or directory
+Traceback (most recent call last):
+  File "/mnt/public/matsumoto/ORIENT/scripts/../src/rank_control.py", line 232, in <module>
+    main()
+  File "/mnt/public/matsumoto/ORIENT/scripts/../src/rank_control.py", line 218, in main
+    appr.train_loop(0, trn_loader[0], val_loader[0], None)
+  File "/mnt/public/matsumoto/ORIENT/src/approach/sow.py", line 140, in train_loop
+    success = self.train_epoch(t, trn_loader)
+  File "/mnt/public/matsumoto/ORIENT/src/approach/sow.py", line 290, in train_epoch
+    outputs = self.model(images.to(self.device))
+  File "/mnt/public/ORIENT/aaai2025/venv/lib64/python3.9/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/mnt/public/ORIENT/aaai2025/venv/lib64/python3.9/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/mnt/public/matsumoto/ORIENT/src/networks/network.py", line 57, in forward
+    x = self.model(x)
+  File "/mnt/public/ORIENT/aaai2025/venv/lib64/python3.9/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/mnt/public/ORIENT/aaai2025/venv/lib64/python3.9/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/mnt/public/matsumoto/ORIENT/src/networks/resnet50sow.py", line 233, in forward
+    x = self.classifier[1](x)
+  File "/mnt/public/ORIENT/aaai2025/venv/lib64/python3.9/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/mnt/public/ORIENT/aaai2025/venv/lib64/python3.9/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/mnt/public/matsumoto/ORIENT/src/networks/sow_libs_V3.py", line 423, in forward
+    Z1 = self.V_func(X, self.tan_2theta, self.ptbl, self.rank, self.freezed_rank)
+  File "/mnt/public/ORIENT/aaai2025/venv/lib64/python3.9/site-packages/torch/autograd/function.py", line 575, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+  File "/mnt/public/matsumoto/ORIENT/src/networks/sow_libs_V3.py", line 90, in forward
+    sow_cpp.forward_V(Z0, ptbl, rank_T, tan_2theta, cos_theta, sin_theta, ZZ, Z1)
+KeyboardInterrupt
