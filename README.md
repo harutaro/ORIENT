@@ -106,7 +106,7 @@ cd $(TOP)
 source .venv/bin/activate.csh
 cd scripts
 ./rank_control_sow.csh {gpu}
-~~
+~~~
 
 ### Continual Learning (Rank Increasing)
 
