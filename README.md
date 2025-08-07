@@ -43,7 +43,7 @@
 	python3 -c 'import sys; print("\n".join(sys.path))'
 	pip install -U pip
 	pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
-	pip matplotlib scipy pynvml
+	pip install matplotlib scipy pynvml
     
 (2) install 'sow_cpp' package in your virtual environment    
 

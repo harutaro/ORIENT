@@ -363,8 +363,8 @@ class SOW_V3(nn.Module):
         sow_dict = torch.load(init_file)
         # 定数 ptbl, ranks, ttbl, S_max の設定
         self.ptbl = sow_dict['ptbl'].to(device=device)
-        self.ranks = sow_dict['ranks'].to(device=device)
-        self.ttbl = sow_dict['ttbl'].to(device=device)
+        #self.ranks = sow_dict['ranks'].to(device=device)
+        #self.ttbl = sow_dict['ttbl'].to(device=device)
         self.S_max = sow_dict['S_max'].to(device=device)
         # パラメータ tan_2phi, a, tan_2theta の設定（phi, theta は -pi/4 [rad] 以上, +pi/4 未満）
         self.tan_2phi = nn.Parameter(sow_dict['tan_2phi'].to(device=device))

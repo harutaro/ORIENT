@@ -1,0 +1,156 @@
+# Y = X・(V・Σ・U^T) の学習で使用する部分モデル Σ の初期値を作成後，減衰パラメータ a を算出
+# ペアテーブル ptbl，ペアタイプテーブル ttbl も算出
+# a, ptbl, ttbl を「初期データ保管ファイル」に書き出し
+# 実行例： python save_init_data.py 0 10
+
+import os
+import sys
+import time
+import numpy as np
+import random
+import math
+import matplotlib.pyplot as plt
+import scipy.stats as sps
+import scipy.cluster
+from scipy.stats import f
+
+import torch
+import torch.nn as nn
+from torch.autograd import Function
+import pynvml
+import sow_cpp
+#from pdb import set_trace as db
+
+def seed_everything(seed=0):
+    """Fix all random seeds"""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    return
+
+def print_ptbl(tbl):
+    N = int((1+math.sqrt(1+4*tbl.shape[0]))/2)
+    print(f'N={N}')
+    cnt = 0
+    for i in range(N-1):
+        if N > 16 :
+            if i < 2 or i > N-3:
+                print(f'(%4d) ptbl[%7d:%7d]: (%4d, %4d), (%4d, %4d), ..., (%4d, %4d)'
+                      % (i, cnt, cnt+N, tbl[cnt], tbl[cnt+1],
+                         tbl[cnt+2], tbl[cnt+3],
+                         tbl[cnt+N-2], tbl[cnt+N-1]))
+        else :
+            print(f'(%2d) ptbl[%2d:%2d]:' % (i, cnt, cnt+N), end='')
+            for j in range(int(N/2)):
+                print(f' (%2d,%2d)' % (tbl[cnt+2*j], tbl[cnt+2*j+1]), end='')
+                if j < int(N/2)-1 : print(',', end='')
+            print(']')
+        cnt += N
+    return
+
+def print_Ttbl(rank_list, tbl):
+    #print(rank_list)
+    #print(tbl.shape)
+    R = len(rank_list)
+    N = int((1+math.sqrt(1+8*tbl.shape[0]/R)/2))
+    #print(f'R={R}, N={N}')
+    for n in range(R):
+        r = rank_list[n] - 1
+        if n > 1 and r+1 < int(N/2) : continue
+        print(f'rank: {r+1}')
+        for step in range(0, N-1):
+            if step > 3 and step < N-5 :
+                if step == 4 : print('    ...')
+                continue
+            print(f'  step={step} :\t', end='')
+            for tid in range(0, int(N/2)):
+                if tid > 3 and tid < int(N/2)-4 :
+                    if tid ==4 : print('  ...', end='')
+                    continue
+                print(f'  {tbl[int(n*N*(N-1)/2)+step*int(N/2)+tid]}', end='')
+            print()
+        print()
+    return
+
+def main(device, M):
+    seed_everything(seed=0)
+    dtype = torch.float64
+    N = 2 ** M
+    print(f'N={N}, device={device}, dtype={dtype}')
+
+    ### Load Tables (ptbl, ttbl, ranks)
+    fname = 'networks/INIT/T%04d.dict' % (N)
+    print(f'{fname}: loading..')
+    sow_dictT = torch.load(fname)
+    #for k, v in sow_dictT.items(): print(' ', k, v.shape, v.dtype, v.device, v.requires_grad)
+    ptbl = sow_dictT['ptbl'].to(device=device)
+    # 読み込み結果の確認
+    print('ptbl:', ptbl.shape, ptbl.dtype, ptbl.device)
+    print_ptbl(ptbl)
+    print('-----')
+
+    ### Load tan_2phi
+    fname = 'networks/INIT/U%04d.dict' % (N)
+    print(f'{fname}: loading..')
+    sow_dictU = torch.load(fname)
+    for k, v in sow_dictU.items(): print(' ', k, v.shape, v.dtype, v.device, v.requires_grad)
+    tan_2phi = sow_dictU['tan_2phi']
+    print('tan_2phi:', tan_2phi.shape, tan_2phi.dtype, tan_2phi.device)
+    print(tan_2phi)
+    print('-----')
+
+    ### Load S
+    fname = 'networks/INIT/S%04d.dict' % (N)
+    print(f'{fname}: loading..')
+    sow_dictS = torch.load(fname)
+    #for k, v in sow_dictS.items(): print(' ', k, v.shape, v.dtype, v.device, v.requires_grad)
+    S_max = sow_dictS['S_max']
+    a = sow_dictS['a']
+    # 読み込み結果の確認
+    print('S_max:', S_max.shape, S_max.dtype, S_max.device)
+    print(S_max)
+    print('a:', a.shape, a.dtype, a.device)
+    print(a)
+    print('-----')
+    
+    ### Load tan_2theta
+    fname = 'networks/INIT/V%04d.dict' % (N)
+    print(f'{fname}: loading..')
+    sow_dictV = torch.load(fname)
+    #for k, v in sow_dictV.items(): print(' ', k, v.shape, v.dtype, v.device, v.requires_grad)
+    tan_2theta = sow_dictV['tan_2theta']
+    print('tan_2theta:', tan_2theta.shape, tan_2theta.dtype, tan_2theta.device)
+    print(tan_2theta)
+    print('-----')
+
+    ### Save ptbl, ranks, ttbl, tan_2phi, S_max, a, tan_2theta
+    sow_dict = dict()
+    sow_dict['ptbl'] = ptbl.to('cpu')
+    sow_dict['S_max'] = S_max.to('cpu')
+    sow_dict['a'] = a.to('cpu')
+    sow_dict['tan_2phi'] = tan_2phi.to('cpu')
+    sow_dict['tan_2theta'] = tan_2theta.to('cpu')
+    print('sow_dict:', type(sow_dict), 'len=', len(sow_dict))
+    for k, v in sow_dict.items() :
+        if torch.is_tensor(v) : print(' ', k, type(v), v.shape, v.dtype, v.device, v.requires_grad)
+        else : print(' ', k, type(v), v)
+    torch.save(sow_dict, f'networks/INIT/%04d.dict' % (N))
+    return
+
+if __name__=='__main__':
+    if len(sys.argv) != 3 :
+        print(F'[USAGE] {sys.argv[0]} gpu M')
+        exit()
+    gpu = int(sys.argv[1])
+    use_cuda = torch.cuda.is_available()
+    if use_cuda:
+        torch.cuda.set_device(gpu)
+        device = torch.device(f'cuda:{gpu}')
+    else: raise ValueError("CUDA is not available!!")
+    M = int(sys.argv[2])
+    main(device, M)
+    exit()
