@@ -99,10 +99,13 @@
     - The above model should be made by "$(TOP)/script/full_rank_sow.csh"
     - the model is backed up at "RESULT.sav/CR1/0/cifar100_sow/models/task0.ckpt"
 
+
+       
 	cd $(TOP)
 	source .venv/bin/activate.csh
 	cd scripts
 	./rank_control_sow.csh {gpu}
+
 
 ### Continual Learning (Rank Increasing)
 
