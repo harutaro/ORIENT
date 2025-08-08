@@ -105,10 +105,10 @@
 cd $(TOP)
 source .venv/bin/activate.csh
 cd scripts
-./rank_control_sow.csh {gpu}
+./rank_control_sow.csh {gpu} | grep ' n='
 ~~~
 
-### Continual Learning (Rank Increasing)
+### Continual Learning (Rank Increasing)  (Table 1)
 
 (1) For the model with Fully-Connected Layer
 

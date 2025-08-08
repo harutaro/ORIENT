@@ -1,6 +1,0 @@
-/mnt/public/matsumoto/ORIENT/src/networks/sow_libs_V3.py:83: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
-  rank_T = torch.tensor(rank, dtype=torch.int, device=Z0.device, requires_grad=False)
-/mnt/public/matsumoto/ORIENT/src/networks/sow_libs_V3.py:260: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
-  rank_T = torch.tensor(rank, dtype=torch.int, device=Z1.device, requires_grad=False)
-/mnt/public/matsumoto/ORIENT/src/networks/sow_libs_V3.py:172: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
-  rank_T = torch.tensor(rank, dtype=torch.int, device=Z2.device, requires_grad=False)

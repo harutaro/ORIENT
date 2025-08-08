@@ -1,7 +1,7 @@
 #!/bin/csh -f
 
 # Usage:
-#   aaai2025.csh
+#   rank_control.csh
 #	--approach { joint | finetuning | ewc | path_integral | sow | supsup | wsn | hat }
 #	--dataset { cifar100 | tiny-imagenet-200 }
 #	--network { alexnet_32 | resnet50_32 | alexnet_32sow | resnet50_32sow | alexnet_32supsup | resnet50_32supsup | alexnet_32wsn | resnet50_32wsn}

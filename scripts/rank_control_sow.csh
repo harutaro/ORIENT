@@ -1,7 +1,7 @@
 #!/bin/csh -f
-# usage: full_rank_sow.csh gpu
+# usage: rank_control_sow.csh gpu
 ## dataset: { cifar100, tiny-imagenet-200}
-## network: { resnet50_32sow }
+## network: { resnet50_32sow, alexnet_32sow }
 
 unsetenv LANG
 set gpu = $argv[1]
