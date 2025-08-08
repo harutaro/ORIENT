@@ -2737,3 +2737,5 @@ sow: rank=352, freezed_rank=1024
 | Epoch  96, lr=2.9e-03 2.9e-03 time= 13.3s/ 15.5s | Train: loss=2.519, TAw acc= 37.3% | Valid: time=  2.0s loss=2.255, TAw acc= 44.6% |
 | Epoch  97, lr=2.9e-03 2.9e-03 time= 13.3s/ 15.5s | Train: loss=2.523, TAw acc= 37.2% | Valid: time=  2.1s loss=2.246, TAw acc= 45.1% |
 | Epoch  98, lr=2.9e-03 2.9e-03 time= 13.2s/ 15.5s | Train: loss=2.511, TAw acc= 37.4% | Valid: time=  2.0s loss=2.248, TAw acc= 44.8% |
+| Epoch  99, lr=2.9e-03 2.9e-03 time= 13.2s/ 15.4s | Train: loss=2.521, TAw acc= 37.5% | Valid: time=  2.0s loss=2.247, TAw acc= 45.2% |
+| Epoch 100, lr=2.9e-03 2.9e-03 time= 13.2s/ 15.5s | Train: loss=2.515, TAw acc= 37.4% | Valid: time=  2.0s loss=2.254, TAw acc= 44.8% |

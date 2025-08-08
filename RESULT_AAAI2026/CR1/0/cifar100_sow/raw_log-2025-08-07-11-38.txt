@@ -12586,3 +12586,15 @@
 {"group": "valid", "iter": 98, "name": "acc", "task": 0, "time": "2025-08-08-05-02", "value": 44.84}
 {"group": "train", "iter": 98, "name": "patience", "task": 0, "time": "2025-08-08-05-02", "value": 27}
 {"group": "train", "iter": 98, "name": "lr", "task": 0, "time": "2025-08-08-05-02", "value": 0.002922663899701489}
+{"group": "train", "iter": 99, "name": "loss", "task": 0, "time": "2025-08-08-05-02", "value": 2.5211175263298884}
+{"group": "train", "iter": 99, "name": "acc", "task": 0, "time": "2025-08-08-05-02", "value": 37.504444444444445}
+{"group": "valid", "iter": 99, "name": "loss", "task": 0, "time": "2025-08-08-05-02", "value": 2.2466854511260985}
+{"group": "valid", "iter": 99, "name": "acc", "task": 0, "time": "2025-08-08-05-02", "value": 45.16}
+{"group": "train", "iter": 99, "name": "patience", "task": 0, "time": "2025-08-08-05-02", "value": 26}
+{"group": "train", "iter": 99, "name": "lr", "task": 0, "time": "2025-08-08-05-02", "value": 0.002922663899701489}
+{"group": "train", "iter": 100, "name": "loss", "task": 0, "time": "2025-08-08-05-03", "value": 2.514637727440728}
+{"group": "train", "iter": 100, "name": "acc", "task": 0, "time": "2025-08-08-05-03", "value": 37.38444444444444}
+{"group": "valid", "iter": 100, "name": "loss", "task": 0, "time": "2025-08-08-05-03", "value": 2.2542332275390624}
+{"group": "valid", "iter": 100, "name": "acc", "task": 0, "time": "2025-08-08-05-03", "value": 44.84}
+{"group": "train", "iter": 100, "name": "patience", "task": 0, "time": "2025-08-08-05-03", "value": 25}
+{"group": "train", "iter": 100, "name": "lr", "task": 0, "time": "2025-08-08-05-03", "value": 0.002922663899701489}
